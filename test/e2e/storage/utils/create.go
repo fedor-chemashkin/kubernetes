@@ -289,6 +289,7 @@ var factories = map[What]ItemFactory{
 	{"ServiceAccount"}:     &serviceAccountFactory{},
 	{"StatefulSet"}:        &statefulSetFactory{},
 	{"StorageClass"}:       &storageClassFactory{},
+	{"ConfigMap"}:          &configMapFactory{},
 }
 
 // PatchName makes the name of some item unique by appending the
@@ -335,6 +336,8 @@ func patchItemRecursively(f *framework.Framework, item interface{}) error {
 	case *v1.ServiceAccount:
 		PatchNamespace(f, &item.ObjectMeta.Namespace)
 	case *v1.Secret:
+		PatchNamespace(f, &item.ObjectMeta.Namespace)
+	case *v1.ConfigMap:
 		PatchNamespace(f, &item.ObjectMeta.Namespace)
 	case *rbacv1.ClusterRoleBinding:
 		PatchName(f, &item.Name)
@@ -568,6 +571,27 @@ func (*storageClassFactory) Create(f *framework.Framework, i interface{}) (func(
 	client := f.ClientSet.StorageV1().StorageClasses()
 	if _, err := client.Create(item); err != nil {
 		return nil, errors.Wrap(err, "create StorageClass")
+	}
+	return func() error {
+		return client.Delete(item.GetName(), &metav1.DeleteOptions{})
+	}, nil
+}
+
+type configMapFactory struct{}
+
+func (f *configMapFactory) New() runtime.Object {
+	return &v1.ConfigMap{}
+}
+
+func (*configMapFactory) Create(f *framework.Framework, i interface{}) (func() error, error) {
+	item, ok := i.(*v1.ConfigMap)
+	if !ok {
+		return nil, errorItemNotSupported
+	}
+
+	client := f.ClientSet.CoreV1().ConfigMaps(f.Namespace.GetName())
+	if _, err := client.Create(item); err != nil {
+		return nil, errors.Wrap(err, "create ConfigMap")
 	}
 	return func() error {
 		return client.Delete(item.GetName(), &metav1.DeleteOptions{})
